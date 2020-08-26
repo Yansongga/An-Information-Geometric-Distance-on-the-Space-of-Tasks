@@ -1,0 +1,431 @@
+{
+ "cells": [
+  {
+   "cell_type": "code",
+   "execution_count": 1,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "import torch \n",
+    "import torchvision as thv\n",
+    "from torchvision import transforms\n",
+    "import  torch as th\n",
+    "from torch.utils.data import DataLoader\n",
+    "\n",
+    "from utils_2 import  check_mkdir \n",
+    "from utils_2 import  train_epoch, data_iter, transfer, projection\n",
+    "from utils_2 import  test_target, test_source, test, transfer\n",
+    "import torch.nn as nn\n",
+    "import torch.nn.functional as F\n",
+    "import torch.optim as optim\n",
+    "from collections import defaultdict\n",
+    "\n",
+    "from Res_model import CNN_torch, CNN\n",
+    "import os, pdb, sys, json, subprocess, \\\n",
+    "       time, logging, argparse, \\\n",
+    "       pickle, math, gzip, numpy as np, \\\n",
+    "       glob\n",
+    "\n",
+    "from backpack import extend, backpack\n",
+    "from backpack.extensions import BatchGrad, SumGradSquared, Variance, BatchL2Grad\n",
+    "#from gpu_memory_log import gpu_memory_log\n",
+    "\n",
+    "#import matplotlib.pylab as pl\n",
+    "import random\n",
+    "import ot\n",
+    "import ot.plot\n",
+    "from ot.datasets import make_1D_gauss as gauss"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 2,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "transform_train = transforms.Compose([\n",
+    "    transforms.RandomCrop(32, padding=4),\n",
+    "    transforms.RandomHorizontalFlip(),\n",
+    "    transforms.ToTensor(),\n",
+    "    #transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),\n",
+    "    transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)), \n",
+    "])\n",
+    "\n",
+    "transform_test = transforms.Compose([\n",
+    "    transforms.ToTensor(),\n",
+    "    #transforms.Normalize((0.4914, 0.4822, 0.4465), (0.2023, 0.1994, 0.2010)),\n",
+    "    transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)), \n",
+    "])"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 3,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "batch_size_test = 1000\n",
+    "learning_rate = 1e-3\n",
+    "momentum = 0\n",
+    "log_interval = 12\n",
+    "train_size = 200\n",
+    "stat = defaultdict(dict)\n",
+    "stat[ 'n_epochs' ] = 80\n",
+    "stat['bsize'] = 4\n",
+    "stat['iterations'] = 8 #num for itrs for couplings updates\n",
+    "stat['weight_decay'] = 5e-4\n",
+    "stat['dev'] = 'cuda: 2' if torch.cuda.is_available() else 'cpu' "
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 4,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "#saving path\n",
+    "MNIST_tran_ini = './CIFAR_initialstatus'\n",
+    "stat['savingmodel'] = './CIFAR_stat'\n",
+    "check_mkdir(stat['savingmodel'] )\n",
+    "check_mkdir(MNIST_tran_ini )"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 5,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Files already downloaded and verified\n",
+      "Files already downloaded and verified\n"
+     ]
+    }
+   ],
+   "source": [
+    "##animal and vehicle dataset\n",
+    "for i in range (2):\n",
+    "    if i == 0:\n",
+    "        index = [ 2, 3, 4, 5, 6, 7 ]\n",
+    "    else:\n",
+    "        index = [ 0, 1, 8, 9 ]\n",
+    "    train = thv.datasets.CIFAR10(root='./data', train=True,\n",
+    "                                        download=True, transform=transform_train)  \n",
+    "    train.targets = torch.tensor( train.targets )\n",
+    "    for k in range( len(index) ):\n",
+    "        if k == 0:\n",
+    "            idx = train.targets == index[k]\n",
+    "        else:\n",
+    "            idx += train.targets == index[k]\n",
+    "    train.targets= train.targets[idx]\n",
+    "    train.data = train.data[idx.numpy().astype(np.bool)]\n",
+    "    #train0 = train\n",
+    "    train0, _ = torch.utils.data.random_split(train, \n",
+    "                                                                [train_size, len(train)- train_size ])\n",
+    "    \n",
+    "    if i == 0:\n",
+    "        stat['source'] = train0\n",
+    "    else:\n",
+    "        stat['target'] = train0"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 6,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# define train loader and validation loader\n",
+    "stat['svl'] = DataLoader( stat['source'], batch_size=1000, \n",
+    "                             shuffle=False, drop_last = False)\n",
+    "stat['tvl'] = DataLoader( stat['target'], batch_size=1000, \n",
+    "                             shuffle=False, drop_last = False)\n",
+    "\n",
+    "stat['sdl'] = DataLoader( stat['source'], batch_size=stat['bsize'], \n",
+    "                             shuffle=True, drop_last = False)\n",
+    "stat['tdl'] = DataLoader( stat['target'], batch_size=stat['bsize'], \n",
+    "                             shuffle=True, drop_last = False)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 7,
+   "metadata": {
+    "scrolled": true
+   },
+   "outputs": [
+    {
+     "data": {
+      "image/png": "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\n",
+      "text/plain": [
+       "<Figure size 432x288 with 1 Axes>"
+      ]
+     },
+     "metadata": {
+      "needs_background": "light"
+     },
+     "output_type": "display_data"
+    }
+   ],
+   "source": [
+    "##display images###\n",
+    "import matplotlib.pyplot as plt \n",
+    "def imshow(img):\n",
+    "    img = img / 2 + 0.5     # unnormalize\n",
+    "    npimg = img.numpy()\n",
+    "    plt.imshow(np.transpose(npimg, (1, 2, 0)))\n",
+    "    plt.show()\n",
+    "    \n",
+    "images, labels = stat['source'][1]\n",
+    "#images, labels = sub[0]\n",
+    "\n",
+    "# show images\n",
+    "imshow(thv.utils.make_grid(images))"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": []
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 8,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# pre train model on source task and save the model\n",
+    "#for epoch in range( 12 ):\n",
+    "#    train_epoch(network, stat, optimizer)\n",
+    "#    if (epoch + 1) %2 == 0:\n",
+    " #       test(stat, network )"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 9,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "#torch.save(\n",
+    "#    network.state_dict(), \n",
+    " #                  os.path.join(MNIST_tran_ini, \n",
+    " #                              'CNN={}.pth'.format( ( 'animal', 'vehicle' ) )\n",
+    "#                               )\n",
+    "#)  "
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": []
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 10,
+   "metadata": {},
+   "outputs": [],
+   "source": [
+    "# load pre-trained model\n",
+    "network = CNN().to(stat['dev'])\n",
+    "network.load_state_dict(\n",
+    "    torch.load(\n",
+    "        os.path.join(\n",
+    "            MNIST_tran_ini, 'CNN={}.pth'.format( ( 'animal', 'vehicle') )\n",
+    "        )))\n",
+    "\n",
+    "optimizer = optim.SGD( network.parameters()\n",
+    "                      , lr=1e-3, momentum=0.9, weight_decay = stat['weight_decay']\n",
+    ")"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": 11,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "/home/gaoyans/envs/gtorch/lib/python3.6/site-packages/ipykernel_launcher.py:18: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.clone().detach() or sourceTensor.clone().detach().requires_grad_(True), rather than torch.tensor(sourceTensor).\n",
+      "/home/gaoyans/envs/gtorch/lib/python3.6/site-packages/ipykernel_launcher.py:19: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.clone().detach() or sourceTensor.clone().detach().requires_grad_(True), rather than torch.tensor(sourceTensor).\n",
+      "/home/gaoyans/envs/gtorch/lib/python3.6/site-packages/ipykernel_launcher.py:21: UserWarning: Implicit dimension choice for softmax has been deprecated. Change the call to include dim=X as an argument.\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "Time used is  45.70720958709717\n"
+     ]
+    }
+   ],
+   "source": [
+    "#Set up\n",
+    "stat['T'] = int(( len(stat['source']) / stat['bsize']) * stat[ 'n_epochs' ]) \n",
+    "stat['interval'] = int( stat['T'] / 25) \n",
+    "#stat['cp'][0] = np.ones( ( len(stat['source']) ,  len(stat['target']) )  ) / ( \n",
+    "#    len(stat['source']) *  len(stat['target']))\n",
+    "stat['cp'][0]  =np.identity( len(stat['source']) ) / len(stat['source']) \n",
+    "stat['la'][0] = 0\n",
+    "\n",
+    "###comouting model predictions for source images\n",
+    "start = time.time()\n",
+    "network.eval()  \n",
+    "ns, nt = len( stat['source'] ), len( stat['target'] )  \n",
+    "with torch.no_grad():\n",
+    "    for m in range( ns ): \n",
+    "        for n in range( nt ):\n",
+    "            xs, ys = stat['source'][ m ]\n",
+    "            xt, yt = stat['target'][ n ]\n",
+    "            xs, ys = xs.unsqueeze(0).to(stat['dev']), torch.tensor(ys).view(-1).to(stat['dev']) \n",
+    "            xt, yt = xt.unsqueeze(0).to(stat['dev']), torch.tensor(yt).view(-1).to(stat['dev'])\n",
+    "            x =  xs\n",
+    "            stat['pred'][ ( 0, m, n) ] = F.softmax(  network(x) )\n",
+    "            \n",
+    "print('Time used is ', time.time() - start)"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "0 itr\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "/home/gaoyans/CPMmanifold /utils_2.py:121: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.clone().detach() or sourceTensor.clone().detach().requires_grad_(True), rather than torch.tensor(sourceTensor).\n",
+      "  xs, ys = xs.unsqueeze(0).to(stat['dev']), torch.tensor(ys).view(-1).to(stat['dev'])\n",
+      "/home/gaoyans/CPMmanifold /utils_2.py:126: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.clone().detach() or sourceTensor.clone().detach().requires_grad_(True), rather than torch.tensor(sourceTensor).\n",
+      "  xt, yt = xt.unsqueeze(0).to(stat['dev']), torch.tensor(yt).view(-1).to(stat['dev'])\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "#####source loss######\n",
+      "\n",
+      "Test set: Avg. loss: 0.1534, Accuracy: 190/200 (95%)\n",
+      "\n",
+      "#####target loss######\n",
+      "\n",
+      "Test set: Avg. loss: 7.7970, Accuracy: 0/200 (0%)\n",
+      "\n",
+      "Time used is  0.6858129501342773\n"
+     ]
+    },
+    {
+     "name": "stderr",
+     "output_type": "stream",
+     "text": [
+      "/home/gaoyans/CPMmanifold /utils_2.py:68: UserWarning: Implicit dimension choice for log_softmax has been deprecated. Change the call to include dim=X as an argument.\n",
+      "  output = F.log_softmax(  network(data) )\n",
+      "/home/gaoyans/envs/gtorch/lib/python3.6/site-packages/torch/nn/_reduction.py:43: UserWarning: size_average and reduce args will be deprecated, please use reduction='sum' instead.\n",
+      "  warnings.warn(warning.format(ret))\n",
+      "/home/gaoyans/CPMmanifold /utils_2.py:49: UserWarning: Implicit dimension choice for log_softmax has been deprecated. Change the call to include dim=X as an argument.\n",
+      "  output = F.log_softmax(  network(data) )\n",
+      "/home/gaoyans/CPMmanifold /utils_2.py:220: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.clone().detach() or sourceTensor.clone().detach().requires_grad_(True), rather than torch.tensor(sourceTensor).\n",
+      "  xs, ys = xs.unsqueeze(0).to(stat['dev']), torch.tensor(ys).view(-1).to(stat['dev'])\n",
+      "/home/gaoyans/CPMmanifold /utils_2.py:221: UserWarning: To copy construct from a tensor, it is recommended to use sourceTensor.clone().detach() or sourceTensor.clone().detach().requires_grad_(True), rather than torch.tensor(sourceTensor).\n",
+      "  xt, yt = xt.unsqueeze(0).to(stat['dev']), torch.tensor(yt).view(-1).to(stat['dev'])\n",
+      "/home/gaoyans/CPMmanifold /utils_2.py:231: UserWarning: Implicit dimension choice for softmax has been deprecated. Change the call to include dim=X as an argument.\n",
+      "  stat['pred'][ ( kt, m, n) ] = F.softmax(  network(x) )\n",
+      "/home/gaoyans/CPMmanifold /utils_2.py:235: UserWarning: Implicit dimension choice for softmax has been deprecated. Change the call to include dim=X as an argument.\n",
+      "  pred1 = F.softmax(  network(x1) )\n"
+     ]
+    },
+    {
+     "name": "stdout",
+     "output_type": "stream",
+     "text": [
+      "#####source loss######\n",
+      "\n",
+      "Test set: Avg. loss: 0.1676, Accuracy: 200/200 (100%)\n",
+      "\n",
+      "#####target loss######\n",
+      "\n",
+      "Test set: Avg. loss: 3.2552, Accuracy: 0/200 (0%)\n",
+      "\n",
+      "Time used is  315.233008146286\n"
+     ]
+    }
+   ],
+   "source": [
+    "#couplings updates block\n",
+    "saving = defaultdict(dict)\n",
+    "for itr in range( stat['iterations'] ):\n",
+    "    network = CNN()\n",
+    "    network.load_state_dict(\n",
+    "        torch.load(\n",
+    "            os.path.join(\n",
+    "                MNIST_tran_ini, 'CNN={}.pth'.format( ( 'animal', 'vehicle') )\n",
+    "            )))\n",
+    "    network = network.to(stat['dev'])\n",
+    "    projection(network, MNIST_tran_ini, stat, saving, itr)\n",
+    "    stat[ 'distance' ][ itr ] = torch.tensor( stat['cp'][itr] * stat['r_dist'][itr] ).sum()\n",
+    "    saving['distance'][itr] = stat[ 'distance' ][ itr ]\n",
+    "    print( stat[ 'distance' ][ itr ], 'riemann distance at ', itr )\n",
+    "    print( torch.tensor( stat['cp'][itr + 1] * stat['r_dist'][itr] ).sum() )\n",
+    "    print( torch.tensor( stat['cp'][itr + 1] * stat['tr_loss'][itr] ).sum(), 'loss' )"
+   ]
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": []
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": []
+  },
+  {
+   "cell_type": "code",
+   "execution_count": null,
+   "metadata": {},
+   "outputs": [],
+   "source": []
+  }
+ ],
+ "metadata": {
+  "kernelspec": {
+   "display_name": "Python 3",
+   "language": "python",
+   "name": "python3"
+  },
+  "language_info": {
+   "codemirror_mode": {
+    "name": "ipython",
+    "version": 3
+   },
+   "file_extension": ".py",
+   "mimetype": "text/x-python",
+   "name": "python",
+   "nbconvert_exporter": "python",
+   "pygments_lexer": "ipython3",
+   "version": "3.6.10"
+  }
+ },
+ "nbformat": 4,
+ "nbformat_minor": 4
+}
