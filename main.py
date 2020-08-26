@@ -10,15 +10,15 @@ from torchvision import transforms
 import  torch as th
 from torch.utils.data import DataLoader
 
-from utils_2 import  check_mkdir 
-from utils_2 import  train_epoch, data_iter, transfer, projection
-from utils_2 import  test_target, test_source, test, transfer
+from utils import  check_mkdir, train_epoch, test_target, test_source, test, data_iter, transfer, projection
+#from utils import  train_epoch, data_iter, transfer, projection
+#from utils import  test_target, test_source, test, transfer
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from collections import defaultdict
 
-from Res_model import CNN_torch, CNN
+from model import CNN_torch, CNN
 import os, pdb, sys, json, subprocess,        time, logging, argparse,        pickle, math, gzip, numpy as np,        glob
 
 from backpack import extend, backpack
@@ -148,21 +148,21 @@ imshow(thv.utils.make_grid(images))
 
 
 # pre train model on source task and save the model
-#for epoch in range( 12 ):
-#    train_epoch(network, stat, optimizer)
-#    if (epoch + 1) %2 == 0:
- #       test(stat, network )
+for epoch in range( 20 ):
+    train_epoch(network, stat, optimizer)
+    if (epoch + 1) %2 == 0:
+        test(stat, network )
 
 
 # In[9]:
 
 
-#torch.save(
-#    network.state_dict(), 
- #                  os.path.join(MNIST_tran_ini, 
- #                              'CNN={}.pth'.format( ( 'animal', 'vehicle' ) )
-#                               )
-#)  
+torch.save(
+    network.state_dict(), 
+                   os.path.join(MNIST_tran_ini, 
+                               'CNN={}.pth'.format( ( 'animal', 'vehicle' ) )
+                               )
+)  
 
 
 # In[ ]:
@@ -198,7 +198,7 @@ stat['interval'] = int( stat['T'] / 25)
 stat['cp'][0]  =np.identity( len(stat['source']) ) / len(stat['source']) 
 stat['la'][0] = 0
 
-###comouting model predictions for source images
+###computing model predictions for source images
 start = time.time()
 network.eval()  
 ns, nt = len( stat['source'] ), len( stat['target'] )  
@@ -218,7 +218,7 @@ print('Time used is ', time.time() - start)
 # In[ ]:
 
 
-#couplings updates block
+#solving the optimal couplings
 saving = defaultdict(dict)
 for itr in range( stat['iterations'] ):
     network = CNN()
@@ -239,16 +239,6 @@ for itr in range( stat['iterations'] ):
 # In[ ]:
 
 
-
-
-
-# In[ ]:
-
-
-
-
-
-# In[ ]:
 
 
 
