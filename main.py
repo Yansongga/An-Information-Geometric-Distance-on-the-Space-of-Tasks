@@ -196,7 +196,7 @@ for epoch in range( 20 ):
 torch.save(
     network.state_dict(), 
                    os.path.join(MNIST_tran_ini, 
-                               'CNN={}.pth'.format( ( 'animal', 'vehicle' ) )
+                               'CNN={}.pth'.format( 'animal' )
                                )
 )  
 
@@ -215,7 +215,7 @@ network = CNN().to(stat['dev'])
 network.load_state_dict(
     torch.load(
         os.path.join(
-            MNIST_tran_ini, 'CNN={}.pth'.format( ( 'animal', 'vehicle') )
+            MNIST_tran_ini, 'CNN={}.pth'.format( 'animal' )
         )))
 
 optimizer = optim.SGD( network.parameters()
@@ -258,7 +258,7 @@ for itr in range( stat['iterations'] ):
     network.load_state_dict(
         torch.load(
             os.path.join(
-                MNIST_tran_ini, 'CNN={}.pth'.format( ( 'animal', 'vehicle') )
+                MNIST_tran_ini, 'CNN={}.pth'.format( 'animal' )
             )))
     network = network.to(stat['dev'])
     projection(network, MNIST_tran_ini, stat, saving, itr)
