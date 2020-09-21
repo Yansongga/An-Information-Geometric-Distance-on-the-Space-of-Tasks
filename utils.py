@@ -170,8 +170,17 @@ def projection(network, MNIST_tran_ini, stat, saving, itr):
     
     #cost = stat['r_dist'][itr] + 0. 
     cost = stat['tr_loss'][itr] + 0. 
-    #cp = ot.emd(ps, pt, cost)
-    stat['cp'][( itr + 1 )] = 0.1 *  ( ot.emd(ps, pt, cost) + 0. ) + 0.9 * ( stat['cp'][itr] + 0.) 
+    cp = stat['cp'][itr] + 0. 
+    
+    ### solving regularized optimal transportation 
+    reg =  2 ** ( itr - 1 )
+    def f(G):
+        return - ( G *  cp).sum()   
+    def df(G):
+        return - cp
+    stat['cp'][( itr + 1 )] = ot.optim.cg(ps, pt, cost, reg, f, df, G0 = cp, verbose=True)
+    
+    #stat['cp'][( itr + 1 )] = 0.1 *  ( ot.emd(ps, pt, cost) + 0. ) + 0.9 * ( stat['cp'][itr] + 0.) 
     #stat['cp'][( itr + 1 )] = ot.emd(ps, pt, cost) + 0.
     #copy down the data
     saving['cp'][itr]= stat['cp'][itr]
@@ -194,7 +203,8 @@ def transfer(itr, t, network, optimizer, stat, epoch):
         
         # time plus one
         t += 1
-        stat['la'][t] = t/ stat['T'] +0. 
+        #stat['la'][t] = t/ stat['T'] +0. 
+        stat['la'][t] = np.random.beta( a = t/ stat['T'], b = (1 - t/ stat['T'] + 1e-8) )
                           
         ####SGD algorithm
         network.train()
