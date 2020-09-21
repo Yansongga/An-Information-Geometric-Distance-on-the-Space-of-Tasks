@@ -18,7 +18,7 @@ import torch.nn.functional as F
 import torch.optim as optim
 from collections import defaultdict
 
-from model import CNN_torch, CNN
+from model import CNN_torch, CNN, Net
 import os, pdb, sys, json, subprocess,        time, logging, argparse,        pickle, math, gzip, numpy as np,        glob
 
 from backpack import extend, backpack
