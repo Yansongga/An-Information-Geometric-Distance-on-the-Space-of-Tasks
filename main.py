@@ -139,6 +139,11 @@ imshow(thv.utils.make_grid(images))
 
 
 # In[ ]:
+#####probe network
+import torchvision.models as models_t
+#import torch.utils.model_zoo as model_zoo
+res = models_t.resnet50(pretrained=True)
+probe = Net( res ).to(stat['dev'])
 ####embedding cosine similarities
 start = time.time()
 ns, nt = len( stat['source'] ), len( stat['target'] )   
