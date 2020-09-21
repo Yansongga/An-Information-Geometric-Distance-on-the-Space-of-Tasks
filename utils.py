@@ -218,7 +218,7 @@ def transfer(itr, t, network, optimizer, stat, epoch):
         optimizer.step()        
         stat['loss'][itr].append(float(loss ))
         
-        ####model prediction for each pair of mixing images
+        ####computing the invrements of kl divergence integration for each pair of mixing images
         interval = stat['interval']
         if t % interval == 0:
             network.eval()       
