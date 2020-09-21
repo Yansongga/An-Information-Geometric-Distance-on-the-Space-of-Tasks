@@ -24,7 +24,7 @@ from torch._six import container_abcs
 import torch
 from copy import deepcopy
 from itertools import chain
-from Res_model import ResNet18, ResNet34, ResNet50
+from model import ResNet18, ResNet34, ResNet50
 
 import math
 import ot
@@ -234,7 +234,7 @@ def transfer(itr, t, network, optimizer, stat, epoch):
                         ###loss###
                         #outputs = network( x )                        
                         #stat['tr_loss'][itr][m][n] += float( (1 - stat['la'][t]) * criterion(outputs, ys
-                                                                                   ) + stat['la'][t] * criterion(outputs, yt))
+                        #                                                           ) + stat['la'][t] * criterion(outputs, yt))
                         
                         ##### computing p_{ w_t } ( y | x_t ) 
                         kt = int( t/ interval )
