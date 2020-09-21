@@ -139,9 +139,40 @@ imshow(thv.utils.make_grid(images))
 
 
 # In[ ]:
+####embedding cosine similarities
+start = time.time()
+ns, nt = len( stat['source'] ), len( stat['target'] )   
+stat['embedding'] = np.zeros( (ns ,  nt)  )
+probe.eval()
+with torch.no_grad():
+    for m in range( ns ): 
+        print('Time used is ', time.time() - start)
+        
+        for n in range( nt ):
+            for k in range( 8 ):
+                xs, ys = stat['source'][ m ]
+                xt, yt = stat['target'][ n ]
+                xs, ys = xs.unsqueeze(0).to(stat['dev']), torch.tensor(ys).view(-1).to(stat['dev']) 
+                xt, yt = xt.unsqueeze(0).to(stat['dev']), torch.tensor(yt).view(-1).to(stat['dev'])
+                es, et = probe( xs ), probe( xt )
+                #prod = ( es * et ).sum()       
+                prod = - torch.cosine_similarity(es, et, dim=1)
+                stat['embedding'][m][n] += float( prod ) 
+            stat['embedding'][m][n] /= 8
+        print( prod )
 
+###compute warm up initial guess coupling
+def f(G):
+    return np.sum(G * np.log(G))
+def df(G):
+    return np.log(G) + 1.
+reg = 1e-3
 
-
+ps = np.ones( (ns,) ) / ns
+pt = np.ones( (nt, ) )/nt
+cost = stat['embedding'] + 0.
+#stat['cp'][0] = ot.emd(ps, pt, stat['embedding'] ) + 0. 
+stat['cp'][0 ] = ot.optim.cg(ps, pt, cost, reg, f, df, verbose=True)
 
 
 # In[8]:
@@ -193,9 +224,6 @@ optimizer = optim.SGD( network.parameters()
 #Set up
 stat['T'] = int(( len(stat['source']) / stat['bsize']) * stat[ 'n_epochs' ]) 
 stat['interval'] = int( stat['T'] / 25) 
-#stat['cp'][0] = np.ones( ( len(stat['source']) ,  len(stat['target']) )  ) / ( 
-#    len(stat['source']) *  len(stat['target']))
-stat['cp'][0]  =np.identity( len(stat['source']) ) / len(stat['source']) 
 stat['la'][0] = 0
 
 ###computing model predictions for source images
