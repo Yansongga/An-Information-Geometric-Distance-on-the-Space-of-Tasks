@@ -232,8 +232,8 @@ def transfer(itr, t, network, optimizer, stat, epoch):
                         x = (1 - stat['la'][t]) * xs + stat['la'][t] * xt
                         
                         ###loss###
-                        outputs = network( x )                        
-                        stat['tr_loss'][itr][m][n] += float( (1 - stat['la'][t]) * criterion(outputs, ys
+                        #outputs = network( x )                        
+                        #stat['tr_loss'][itr][m][n] += float( (1 - stat['la'][t]) * criterion(outputs, ys
                                                                                    ) + stat['la'][t] * criterion(outputs, yt))
                         
                         ##### computing p_{ w_t } ( y | x_t ) 
