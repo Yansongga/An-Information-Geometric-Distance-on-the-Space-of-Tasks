@@ -184,9 +184,13 @@ stat['cp'][0 ] = ot.optim.cg(ps, pt, cost, reg, f, df, verbose=True)
 
 
 # pre train model on source task and save the model
-for epoch in range( 20 ):
+network = CNN().to(stat['dev'])
+optimizer = optim.SGD( network.parameters()
+                      , lr=1e-3, momentum=0.9, weight_decay = stat['weight_decay']
+)
+for epoch in range( 30 ):
     train_epoch(network, stat, optimizer)
-    if (epoch + 1) %2 == 0:
+    if (epoch + 1) %5 == 0:
         test(stat, network )
 
 
