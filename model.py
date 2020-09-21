@@ -239,3 +239,28 @@ class CNN_torch(nn.Module):
         #x = F.relu(self.fc2(x))
         #x = self.fc3(x)
         return self.fc1(x)
+    
+class Net(nn.Module):
+    def __init__(self , model):
+        super(Net, self).__init__()
+        #delete last layer in model
+        self.resnet_layer = nn.Sequential(*list(model.children())[:-1])
+        
+        #self.transion_layer = nn.ConvTranspose2d(2048, 2048, kernel_size=14, stride=3)
+        #self.pool_layer = nn.MaxPool2d(32)  
+        #self.Linear_layer = nn.Linear(2048, 8)
+        
+    def forward(self, x):
+        x = self.resnet_layer(x)
+ 
+        #x = self.transion_layer(x)
+ 
+        #x = self.pool_layer(x)
+ 
+        x = x.view(x.size(0), -1) 
+ 
+        #x = self.Linear_layer(x)
+        
+        return x
+
+
