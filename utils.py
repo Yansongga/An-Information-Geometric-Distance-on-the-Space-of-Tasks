@@ -219,6 +219,7 @@ def transfer(itr, t, network, optimizer, stat, epoch):
         stat['loss'][itr].append(float(loss ))
         
         ####computing the invrements of kl divergence integration for each pair of mixing images
+        #using matrix multiplication might save more time. 
         interval = stat['interval']
         if t % interval == 0:
             network.eval()       
