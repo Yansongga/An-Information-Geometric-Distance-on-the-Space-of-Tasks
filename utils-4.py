@@ -1,13 +1,5 @@
-#!/usr/bin/env python
-# coding: utf-8
-
-# In[1]:
-
-
 import os, pdb, sys, json, subprocess,        time, logging, argparse,        pickle, math, gzip, numpy as np,        glob
-       #pandas as pd, 
-       
-
+       #pandas as pd,        
 from functools import partial, reduce
 from pprint import pprint
 from copy import deepcopy
@@ -21,7 +13,6 @@ import torch
 
 from collections import defaultdict
 from torch._six import container_abcs
-
 import torch
 from copy import deepcopy
 from itertools import chain
@@ -33,33 +24,6 @@ import ot
 import ot.plot
 from ot.datasets import make_1D_gauss as gauss
 import random
-device = torch.device('cuda: 0')
-args = dict(
-            dev='cuda: 3' if th.cuda.is_available() else 'cpu',
-            bsz=8,
-            E=100,
-            s=42,
-            lr=1e-3,
-            wd=1e-4,
-            lamda=2,
-            gamma=10,
-            TT=1,
-            alpha=0.01,
-            T=10,
-            nz=8,
-            n_scla = 5,
-            n_tcla = 5,
-            ns_each = 8,
-            mbatch = 8
-            )
-
-
-
-
-
-
-
-
 
 # save model
 def check_mkdir(dir_name):
@@ -67,7 +31,7 @@ def check_mkdir(dir_name):
         os.mkdir(dir_name)
         
 
-#
+#taget dataset validation
 def test_target(stat, network, itr):
     network.eval()
     test_loss = 0
@@ -86,10 +50,8 @@ def test_target(stat, network, itr):
     print('\nTest set: Avg. loss: {:.4f}, Accuracy: {}/{} ({:.0f}%)\n'.format( 
         test_loss, correct, len(stat['tvl'].dataset), 
         100. * correct / len(stat['tvl'].dataset)))
-    
-
-        
-#test initial
+            
+#source dataset validation
 def test_source(stat, network, itr):
     network.eval()
     test_loss = 0
@@ -109,8 +71,8 @@ def test_source(stat, network, itr):
         test_loss, correct, len(stat['svl'].dataset), 
         100. * correct / len(stat['svl'].dataset)))
 
-##
-# train_starting
+
+# train model
 def train_epoch(network, stat, optimizer):
     network.train()
     for batch_idx, (data, target) in enumerate( stat['sdl'] ):
@@ -120,12 +82,9 @@ def train_epoch(network, stat, optimizer):
         loss = F.nll_loss(output, target)
         loss.backward()
         optimizer.step()
-        #if batch_idx % log_interval == 0:
-        #    print('Train Epoch: {} [{}/{} ({:.0f}%)]\tLoss: {:.6f}'.format( 
-         #       (epoch+1), batch_idx * len(data), len(stat['dl'][1].dataset), 
-        #        100. * batch_idx / len(stat['dl'][1]), loss.item()))
+   
     
-#
+# test model
 def test(stat, network):
     network.eval()
     test_loss = 0
@@ -145,7 +104,7 @@ def test(stat, network):
         test_loss, correct, len(stat['svl'].dataset), 
         100. * correct / len(stat['svl'].dataset)))
  
-####
+#### ### self-defined data loader based on the couplings between source and target
 def data_iter( stat, cp):
     ns, nt = len( stat['source'] ), len( stat['target'] )
     sp = ns * cp   
@@ -154,15 +113,14 @@ def data_iter( stat, cp):
     indices = list(range(num_examples)) 
     random.shuffle(indices)     
     # 样本的读取顺序是随机的 
-    #j = np.array(indices[i: min(i + batch_size, num_examples)])
-    
+    #j = np.array(indices[i: min(i + batch_size, num_examples)])    
     for i in range(0, num_examples, batch_size):
         #t += 1
         #stat['la'][t] = t/stat['T'] +0. 
         j = list( indices[i: min(i + batch_size, num_examples)] )
         #yield features.take(j), labels.take(j) 
         batch = torch.utils.data.Subset(stat['source'], j)
-        print(len(batch))
+        #print(len(batch))
         for k in range( batch_size  ):
             xs, ys = batch[k]    
             xs, ys = xs.unsqueeze(0).to(stat['dev']), torch.tensor(ys).view(-1).to(stat['dev']) 
@@ -181,56 +139,6 @@ def data_iter( stat, cp):
                                                                                     ), torch.cat((label_t, yt), 0)
         
         yield image_s, label_s, image_t, label_t
-        
-####
-def transfer(itr, t, network, optimizer, stat, epoch):  
-    criterion = nn.CrossEntropyLoss()
-    ns, nt = len( stat['source'] ), len( stat['target'] )   
-    cp = stat['cp'][itr]
-    for d in data_iter(stat, cp):   
-        t += 1
-        stat['la'][t] = t/ stat['T'] +0. 
-        #####evaluating predictions for each pair linear conbinations
-        network.eval()       
-        with torch.no_grad():
-            for m in range( ns ): 
-                for n in range( nt ):
-                    xs, ys = stat['source'][ m ]
-                    xt, yt = stat['target'][ n ]
-                    xs, ys = xs.unsqueeze(0).to(stat['dev']), torch.tensor(ys).view(-1).to(stat['dev']) 
-                    xt, yt = xt.unsqueeze(0).to(stat['dev']), torch.tensor(yt).view(-1).to(stat['dev'])
-                    x = (1 - stat['la'][t]) * xs + stat['la'][t] * xt
-                    stat['pred'][ (m,n) ] = F.softmax(  network(x) )
-                    
-        ####SGD updates
-        network.train()
-        xs, ys, xt, yt = d
-        optimizer.zero_grad()
-        # forward + backward + optimize
-        x = (1 - stat['la'][t]) * xs + stat['la'][t] * xt
-        outputs = network( x )
-        loss = (1 - stat['la'][t]) * criterion(outputs, ys) + stat['la'][t] * criterion(outputs, yt)
-        loss.backward()
-        optimizer.step()
-        
-        stat['loss'][itr].append(float(loss ))
-        
-        ####re-evaluating predictions for each pair linear conbinations
-        network.eval()       
-        with torch.no_grad():
-            for m in range( ns ): 
-                for n in range( nt ):
-                    xs, ys = stat['source'][ m ]
-                    xt, yt = stat['target'][ n ]
-                    xs, ys = xs.unsqueeze(0).to(stat['dev']), torch.tensor(ys).view(-1).to(stat['dev']) 
-                    xt, yt = xt.unsqueeze(0).to(stat['dev']), torch.tensor(yt).view(-1).to(stat['dev'])
-                    x = (1 - stat['la'][t]) * xs + stat['la'][t] * xt
-                    stat['re_pred'][ (m,n) ] = F.softmax(  network(x) )
-        
-                    kl = F.relu(F.kl_div( stat['re_pred'][ (m,n) ].log(), 
-                                  stat['pred'][ (m,n) ], None, None, 'sum'))
-                    stat['r_dist'][itr][m][n] += float( math.sqrt( kl ) / stat['T'] )
-    return t, stat
 
 ####
 def projection(network, MNIST_tran_ini, stat, saving, itr):
@@ -249,7 +157,7 @@ def projection(network, MNIST_tran_ini, stat, saving, itr):
     start = time.time()
     t = 0 
     for epoch in range(stat['n_epochs']):
-        t, stat =  transfer2(itr, t, network, optimizer, stat, epoch)              
+        t, stat =  transfer(itr, t, network, optimizer, stat, epoch)              
         if (epoch+1) % 10 == 0 or epoch == 0:
             print('#####source loss######')
             test_source(stat, network, itr)
@@ -290,169 +198,9 @@ def projection(network, MNIST_tran_ini, stat, saving, itr):
     print(t, 'T')
     print('Time used is ', time.time() - start)
     print('itr_end' )    
-    
+
 ######
-def transfer3(itr, t, network, optimizer, stat, epoch):  
-    criterion = nn.CrossEntropyLoss()
-    ns, nt = len( stat['source'] ), len( stat['target'] )   
-    cp = stat['cp'][itr]
-    for d in data_iter(stat, cp):   
-        t += 1
-        #stat['la'][t] = t/ stat['T'] +0. 
-        ll = t/ stat['T']
-        ll_1 = 1 - t/ stat['T']
-        stat['la'][t] = np.random.beta( a = t/ stat['T'], b = (1 - t/ stat['T'] + 1e-8) )
-        if ll <= 0 or ll_1 <=0:
-            print(ll, ll_1, 'ab')
-        ####SGD updates
-        network.train()
-        xs, ys, xt, yt = d
-        optimizer.zero_grad()
-        # forward + backward + optimize
-        x = (1 - stat['la'][t]) * xs + stat['la'][t] * xt
-        outputs = network( x )
-        loss = (1 - stat['la'][t]) * criterion(outputs, ys) + stat['la'][t] * criterion(outputs, yt)
-        loss.backward()
-        optimizer.step()
-        
-        stat['loss'][itr].append(float(loss ))
-        
-        ####evaluating predictions for each pair linear conbinations
-        interval = stat['interval']
-        if t % interval == 0:
-            network.eval()       
-            with torch.no_grad():
-                for m in range( ns ): 
-                    for n in range( nt ):
-                        xs, ys = stat['source'][ m ]
-                        xt, yt = stat['target'][ n ]
-                        xs, ys = xs.unsqueeze(0).to(stat['dev']), torch.tensor(ys).view(-1).to(stat['dev']) 
-                        xt, yt = xt.unsqueeze(0).to(stat['dev']), torch.tensor(yt).view(-1).to(stat['dev'])
-                        x = (1 - stat['la'][t]) * xs + stat['la'][t] * xt
-                        
-                        ###loss###
-                        #outputs = network( x )                        
-                        #stat['tr_loss'][itr][m][n] += float( (1 - stat['la'][t]) * criterion(outputs, ys
-                         #                                                          ) + stat['la'][t] * criterion(outputs, yt))
-                        
-                        ##### p_{ w_t } ( y | x_{ t } ) 
-                        kt = int( t/ interval )
-                        stat['pred'][ ( kt, m, n) ] = F.softmax(  network(x) )
-                        
-                        #### p_{ w_t } ( y | x_{ t - interval } ) ##
-                        x1 = (1 - stat['la'][t - interval]) * xs + stat['la'][t - interval ] * xt
-                        pred1 = F.softmax(  network(x1) )
-                        
-                        #### call p_{ w_{ t - interval } } ( y | x_{ t - interval } )
-                        pred2 = stat['pred'][ ( kt - 1, m, n) ] 
-                        
-                        ####KL divergence
-                        kl = F.relu(F.kl_div( pred1.log(), 
-                                      pred2, None, None, 'sum'))
-                        stat['r_dist'][itr][m][n] += float( ( math.sqrt( kl ) * interval ) / stat['T'] )
-    return t, stat
-
-def transfer_mixture(itr, t, network, optimizer, stat, epoch):  
-    criterion = nn.CrossEntropyLoss()
-    ns, nt = len( stat['source'] ), len( stat['target'] )   
-    for (ds, dt) in zip ( stat['sdl'], stat['tdl'] ):  
-        t += 1
-        stat['la'][t] = t/ stat['T'] +0. 
-                          
-        ####SGD updates
-        network.train()
-        xs, ys = ds
-        xt, yt = dt
-        xs, ys = xs.to(stat['dev']), ys.to(stat['dev']) 
-        xt, yt = xt.to(stat['dev']), yt.to(stat['dev'])
-        optimizer.zero_grad()
-        # forward + backward + optimize
-        loss = (1 - stat['la'][t]) * criterion(network( xs ), ys) + stat['la'][t] * criterion(network( xt ), yt)
-        loss.backward()
-        optimizer.step()
-        
-        stat['loss'][itr].append(float(loss ))
-        
-        ####evaluating predictions for each pair linear conbinations
-        interval = stat['interval']
-        if t % interval == 0:
-            network.eval()       
-            with torch.no_grad():
-                kl = 0
-                for m in range( ns ): 
-                    xs, ys = stat['source'][ m ]
-                    xt, yt = stat['target'][ m ]
-                    xs, ys = xs.unsqueeze(0).to(stat['dev']), torch.tensor(ys).view(-1).to(stat['dev']) 
-                    xt, yt = xt.unsqueeze(0).to(stat['dev']), torch.tensor(yt).view(-1).to(stat['dev'])
-
-                    ###loss###
-                    #outputs = network( x )                        
-                    #stat['tr_loss'][itr][m][n] += float( (1 - stat['la'][t]) * criterion(outputs, ys
-                    #                                                           ) + stat['la'][t] * criterion(outputs, yt))
-
-                    ##### p_{ w_t } ( y | x_{ t } ) 
-                    kt = int( t/ interval )
-                    stat['pred_s'][ ( kt, m) ] = F.softmax(  network(xs) )
-                    stat['pred_t'][ ( kt, m) ] = F.softmax(  network(xt) )
-
-                    #### p_{ w_t } ( y | x_{ t - interval } ) ##
-                    #x1 = (1 - stat['la'][t - interval]) * xs + stat['la'][t - interval ] * xt
-                    pred1_s, pred1_t = stat['pred_s'][ ( kt, m) ], stat['pred_t'][ ( kt, m) ]
-
-                    #### call p_{ w_{ t - interval } } ( y | x_{ t - interval } )
-                    pred2_s, pred2_t = stat['pred_s'][ ( kt - 1, m) ], stat['pred_t'][ ( kt - 1, m) ]
-
-                    ####KL divergence
-                    kl += (1 - stat['la'][t - interval]) * math.sqrt(
-                        F.relu(
-                            F.kl_div( 
-                                pred1_s.log(), pred2_s, None, None, 'sum'
-                            )
-                        ) 
-                    ) + stat['la'][t - interval] * math.sqrt( 
-                        F.relu(
-                            F.kl_div( 
-                                pred1_t.log(), pred2_t, None, None, 'sum'
-                            )
-                        ) 
-                    )
-                #stat['r_dist'][itr] += float( ( math.sqrt( kl / ns ) * interval ) / stat['T'] )
-                stat['r_dist'][itr] += float( ( kl * interval /ns ) / stat['T'] )
-    return t, stat
-
-####
-def projection_mixture(network, MNIST_tran_ini, stat, saving, itr):
-    optimizer = optim.SGD( network.parameters()
-                          , lr=1e-3, momentum=0.9, weight_decay = stat['weight_decay'] )
-    ns, nt = len( stat['source'] ), len( stat['target'] )   
-    #cp = stat['cp'][itr]
-    stat['source_accu'][itr] = []
-    stat['target_accu'][itr] = []
-    stat['loss'][itr] = [] 
-    stat['r_dist'][itr] = 0
-    #stat['tr_loss'][itr] = np.zeros( (ns ,  nt)  )
-    print(itr,'itr')
-    
-    ####transfer block#####    
-    start = time.time()
-    t = 0 
-    for epoch in range(stat['n_epochs']):
-        t, stat =  transfer_mixture(itr, t, network, optimizer, stat, epoch)              
-        if (epoch+1) % 2 == 0 or epoch == 0:
-            print('#####source loss######')
-            test_source(stat, network, itr)
-            print('#####target loss######')
-            test_target(stat, network, itr)
-            print('Time used is ', time.time() - start)
-    print('################')
-    saving['r_dist'] = stat['r_dist']
-    print(t, 'T')
-    print('Time used is ', time.time() - start)
-    print('itr_end' )    
-    
-###
-######
-def transfer2(itr, t, network, optimizer, stat, epoch):  
+def transfer(itr, t, network, optimizer, stat, epoch):  
     criterion = nn.CrossEntropyLoss()
     ns, nt = len( stat['source'] ), len( stat['target'] )   
     cp = stat['cp'][itr]
@@ -533,10 +281,4 @@ def transfer2(itr, t, network, optimizer, stat, epoch):
                 stat['r_dist'][itr] += ( ( torch.sqrt( F.relu(inc) ) * interval ) / stat['T']  ).cpu().numpy()             
     return t, stat
                 
-                    #for i1 in range(dsize):
-                        #    m = int( k1 * dsize + i1 )
-                        #    for i2 in range(dsize):
-                        #        n = int( k2 * dsize + i2 )
-                        #        count = int( i1 * dsize + i2 )
-                        #        stat['r_dist'][itr][m][n] += float( ( math.sqrt( F.relu(kl[count]) ) * interval ) / stat['T'] ) 
- 
+                   
