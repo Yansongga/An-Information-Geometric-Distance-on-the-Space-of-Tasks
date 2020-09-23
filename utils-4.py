@@ -16,7 +16,7 @@ from torch._six import container_abcs
 import torch
 from copy import deepcopy
 from itertools import chain
-from Res_model import ResNet18, ResNet34, ResNet50
+from model import ResNet18, ResNet34, ResNet50
 
 import math
 
