@@ -1,11 +1,4 @@
-#!/usr/bin/env python
-# coding: utf-8
-
-# In[1]:
-
-
 import torch 
-#import torchvision as thv
 import torchvision
 from torchvision import transforms
 from torch.utils.data import DataLoader
@@ -68,17 +61,15 @@ network = Wide_ResNet(depth = 16, widen_factor = 4).to(args['dev'])
 #define source and target tasks
 source_task, target_task =  'herbivores', 'carnivores' 
 
-
-# In[4]:
-
-
 #### loading source domain data
 train_dataset = torchvision.datasets.CIFAR100(root='./data', train=True, download=True, transform=transform_train)
 eval_dataset = torchvision.datasets.CIFAR100(root='./data', train= True, download=True, transform=transform_test)
+
 #splitting source dataset
 test_dataset = torchvision.datasets.CIFAR100(root='./data', train= False, download=True, transform=transform_test)
 source_train, source_eval = data_split( train_dataset, args[ source_task ], 0 ), data_split( eval_dataset, args[ source_task ], 0 )
 source_test = data_split( test_dataset, args[ source_task ], 0 )
+
 #source task dataloader
 sdl = torch.utils.data.DataLoader(dataset=source_train, batch_size=100, shuffle=True)
 sel = torch.utils.data.DataLoader(dataset=source_eval, batch_size=500, shuffle=False)
@@ -87,10 +78,12 @@ stl = torch.utils.data.DataLoader(dataset=source_test, batch_size=500, shuffle=F
 #### loading target domain data
 train_dataset = torchvision.datasets.CIFAR100(root='./data', train=True, download=True, transform=transform_train)
 eval_dataset = torchvision.datasets.CIFAR100(root='./data', train= True, download=True, transform=transform_test)
+
 #splitting target dataset
 test_dataset = torchvision.datasets.CIFAR100(root='./data', train= False, download=True, transform=transform_test)
 target_train, target_eval = data_split( train_dataset, args[ target_task ], 5 ), data_split( eval_dataset, args[ target_task ], 5 )
 target_test = data_split( test_dataset, args[ target_task ], 5 )
+
 #target task dataloader
 tdl = torch.utils.data.DataLoader(dataset=target_train, batch_size=100, shuffle=True)
 tel = torch.utils.data.DataLoader(dataset=target_eval, batch_size=500, shuffle=False)
@@ -98,9 +91,6 @@ ttl = torch.utils.data.DataLoader(dataset=target_test, batch_size=500, shuffle=F
 
 #Block-diagonalize transport couplings.
 block_diag( args, source_eval, target_eval )
-
-
-# In[3]:
 
 
 # pretrain model on source domain 
@@ -112,6 +102,7 @@ for epoch in range( 600 ):
         test(args, network, sel)
         #tesing on source test dataset
         test(args, network, stl)
+        
 ####save model pretrained on source domain
 torch.save(
     network.state_dict(), 
@@ -120,8 +111,6 @@ torch.save(
                                )
 )
 
-
-# In[ ]:
 
 
 #initialize \Gamma_0
@@ -145,15 +134,11 @@ for itr in range( args['iterations'] ):
     #transfer to target domain
     coupled_distance = coupled_transfer(args, network, source_train, target_train, sel, stl, tel, ttl, itr)
     coupled_distance_list.append( coupled_distance )
+    
+    #print Coupled_Task_Distance
     print(
     '\n Coupled_Task_Distance: {:.4f};    Iteration: {}\n'.format(
         coupled_distance, itr +1
     )
      )
   
-
-
-
-
-
-
