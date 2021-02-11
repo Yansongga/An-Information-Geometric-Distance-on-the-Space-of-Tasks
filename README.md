@@ -1,5 +1,3 @@
-# Task-Metric
-Currently we can comoute the riemann distance in conditional probability distribution manifold. 
-However we failed to optimize the couplings between source and target images. \
+# An Information-Geometric Distance on the Space of Tasks
 
-Next step: try to develope effective algorithms to sovle the optimal transport problm. 
+This is the code for the paper An Information-Geometric Distance on the Space of Tasks by Yansong Gao, Pratik Chaudhari (https://arxiv.org/abs/2011.00613).
