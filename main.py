@@ -69,38 +69,6 @@ network = Wide_ResNet(depth = 16, widen_factor = 4).to(args['dev'])
 source_task, target_task =  'herbivores', 'carnivores' 
 
 
-# In[2]:
-
-
-tau_list = [0]
-t_range =100
-for t in range(t_range):
-        x = (t+1) / t_range
-        if x < 0.5:
-            tau = max( (0.5 - np.arcsin( np.sqrt( 0.5 - x ) ) * 2 / math.pi), 0)
-            #tau = max ( 0.5 - np.sqrt( 0.25 - x ** 2 ), 0 )
-        else:
-            tau = max( (1.5 - np.arcsin( np.sqrt( 1.5 - x ) ) * 2 / math.pi), 0 )
-            #tau = max(0.5 + np.sqrt( 0.25 - ( 1- x) ** 2 ), 0)
-        tau_list.append(tau)
-
-
-# In[3]:
-
-
-import matplotlib.pyplot as plt
-plt.figure(figsize=(3, 3))
-plt.plot(tau_list)
-plt.ylabel('some numbers')
-plt.show()
-
-
-# In[ ]:
-
-
-
-
-
 # In[4]:
 
 
@@ -157,12 +125,12 @@ torch.save(
 
 
 #initialize \Gamma_0
-#beta_mixup( args )
 Initializing_coupling(args)
     
 #evaluating p_{w(0)}(y|x)
 p_w0(args, network)
-    
+
+#
 coupled_distance_list = []
 for itr in range( args['iterations'] ):
     
@@ -185,7 +153,6 @@ for itr in range( args['iterations'] ):
   
 
 
-# In[ ]:
 
 
 
