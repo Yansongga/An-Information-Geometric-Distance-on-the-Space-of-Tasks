@@ -164,15 +164,14 @@ def coupled_transfer(args, network, source_train, target_train, sel, stl, tel, t
         )
         
         count, args =  transfer_epoch(args, network, optimizer, source_train, target_train, itr, count) 
-        #if (epoch+1) % 5 == 0:
-        #    print('Time used is ', time.time() - start, epoch +1, 'epoch', count,'count')
-        if (epoch+1) % 40 == 0:
+      
+        #if (epoch+1) % 40 == 0:
             #print('Time used is ', time.time() - start, epoch +1, 'epoch', count,'count')
             #print('###proceding##', epoch +1, '##of##', args['epochs'])            
-            print('target train domain loss is')
-            test(args, network, tel)
-            print('target test domain loss is')
-            test(args, network, ttl)
+       #     print('target train domain loss is')
+        #    test(args, network, tel)
+        #    print('target test domain loss is')
+        #    test(args, network, ttl)
     
     args['cp'][ itr + 1 ] = []
     info_distance_list = []
@@ -182,10 +181,6 @@ def coupled_transfer(args, network, source_train, target_train, sel, stl, tel, t
         cost = args['dist'][ block_id] + 0. 
         cp = args['cp'][itr][block_id] + 0.     
         
-        #reg = 0.1 * (2 **(itr-1))
-        #reg = 0.05 * (10 **itr) 
-        #reg = 0.05 * (10 **itr) 
-        #reg = stat['reg'][itr]
         reg = 0.05 * (5 **itr) 
         def f(G):
             return 0.5 * np.sum((G - cp)**2) 
