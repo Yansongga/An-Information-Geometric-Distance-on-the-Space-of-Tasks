@@ -142,3 +142,13 @@ for itr in range( args['iterations'] ):
     )
      )
   
+##save data
+states = {
+    'MI': MIs,
+    'bay_accu': bay_accus,
+    'bay_loss': bay_losses,
+    'W1': W1_list
+}
+torch.save( states, './results_syn/syn={}.t7'.format( 
+        5.0
+))
